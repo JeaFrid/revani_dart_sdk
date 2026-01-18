@@ -1,7 +1,8 @@
 name: revani
-description: "A new Flutter package project."
+description: Ultra-Fast, Ultra-Secure, Actor-Model Based Modern NoSQL Database SDK.
 version: 1.0.0
-homepage:
+repository: https://github.com/JeaFrid/revani_dart_sdk
+homepage: https://github.com/JeaFrid/revani_dart_sdk
 
 environment:
   sdk: ^3.10.4
