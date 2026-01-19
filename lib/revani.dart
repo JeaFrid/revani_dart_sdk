@@ -31,8 +31,8 @@ class RevaniClient {
   late final RevaniLivekit livekit;
   late final RevaniPubSub pubsub;
 
-  final StreamController<Map<String, dynamic>> _responseStream =
-      StreamController.broadcast();
+  final StreamController<Map<String, dynamic>> _responseController =
+      StreamController<Map<String, dynamic>>.broadcast();
   final List<int> _buffer = [];
 
   RevaniClient({required this.host, this.port = 16897, this.secure = true}) {
@@ -45,21 +45,25 @@ class RevaniClient {
   }
 
   Future<void> connect() async {
-    if (secure) {
-      _socket = await SecureSocket.connect(
-        host,
-        port,
-        onBadCertificate: (cert) => true,
-      );
-    } else {
-      _socket = await Socket.connect(host, port);
-    }
+    try {
+      if (secure) {
+        _socket = await SecureSocket.connect(
+          host,
+          port,
+          onBadCertificate: (cert) => true,
+        );
+      } else {
+        _socket = await Socket.connect(host, port);
+      }
 
-    _socket!.listen(
-      _onData,
-      onError: (e) => disconnect(),
-      onDone: () => disconnect(),
-    );
+      _socket!.listen(
+        _onData,
+        onError: (e) => _handleError(e),
+        onDone: () => _handleDone(),
+      );
+    } catch (e) {
+      throw Exception("Connection failed: $e");
+    }
   }
 
   void _onData(Uint8List data) {
@@ -74,15 +78,25 @@ class RevaniClient {
         final payload = _buffer.sublist(4, length + 4);
         _buffer.removeRange(0, length + 4);
 
-        final json = jsonDecode(utf8.decode(payload));
+        try {
+          final jsonString = utf8.decode(payload);
+          final json = jsonDecode(jsonString);
 
-        if (json is Map<String, dynamic> &&
-            json.containsKey('encrypted') &&
-            _sessionKey != null) {
-          final decrypted = _decrypt(json['encrypted']);
-          _responseStream.add(jsonDecode(decrypted));
-        } else {
-          _responseStream.add(json);
+          if (json is Map<String, dynamic> &&
+              json.containsKey('encrypted') &&
+              _sessionKey != null) {
+            try {
+              final decrypted = _decrypt(json['encrypted']);
+              _responseController.add(jsonDecode(decrypted));
+            } catch (e) {
+              print("Decryption Error: $e");
+              _responseController.addError(e);
+            }
+          } else {
+            _responseController.add(json);
+          }
+        } catch (e) {
+          print("Protocol Error: $e");
         }
       } else {
         break;
@@ -90,10 +104,26 @@ class RevaniClient {
     }
   }
 
+  void _handleError(dynamic error) {
+    _responseController.addError(error);
+    disconnect();
+  }
+
+  void _handleDone() {
+    _responseController.addError("Connection closed by server");
+    disconnect();
+  }
+
   Future<Map<String, dynamic>> execute(
     Map<String, dynamic> command, {
     bool useEncryption = true,
   }) async {
+    if (_socket == null) {
+      throw Exception("Not connected");
+    }
+
+    final responseFuture = _responseController.stream.first;
+
     final payload = (useEncryption && _sessionKey != null)
         ? {'encrypted': _encrypt(jsonEncode(command))}
         : command;
@@ -101,10 +131,21 @@ class RevaniClient {
     final bytes = utf8.encode(jsonEncode(payload));
     final header = ByteData(4)..setUint32(0, bytes.length);
 
-    _socket!.add(header.buffer.asUint8List());
-    _socket!.add(bytes);
+    try {
+      _socket!.add(header.buffer.asUint8List());
+      _socket!.add(bytes);
+    } catch (e) {
+      throw Exception("Failed to send data: $e");
+    }
 
-    return await _responseStream.stream.first;
+    try {
+      return await responseFuture.timeout(Duration(seconds: 10));
+    } catch (e) {
+      if (e is TimeoutException) {
+        throw Exception("Server timed out.");
+      }
+      rethrow;
+    }
   }
 
   String _encrypt(String text) {
@@ -199,10 +240,13 @@ class RevaniAccount {
         'cmd': 'account/get-id',
         'email': email,
         'password': password,
-      }, useEncryption: false);
+      });
 
       if (idRes['status'] == 200) {
         _client.setAccount(idRes['data']['id']);
+      } else {
+        print("Login Error (ID Fetch): ${idRes['message']}");
+        return false;
       }
       return true;
     }
