@@ -5,7 +5,6 @@
  * See the LICENSE file in the project root for full license information.
  * * For commercial licensing, please contact: JeaFriday
  */
-
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -27,6 +26,9 @@ class RevaniClient {
   late final RevaniAccount account;
   late final RevaniProject project;
   late final RevaniData data;
+  late final RevaniUser user;
+  late final RevaniSocial social;
+  late final RevaniChat chat;
   late final RevaniStorage storage;
   late final RevaniLivekit livekit;
   late final RevaniPubSub pubsub;
@@ -39,6 +41,9 @@ class RevaniClient {
     account = RevaniAccount(this);
     project = RevaniProject(this);
     data = RevaniData(this);
+    user = RevaniUser(this);
+    social = RevaniSocial(this);
+    chat = RevaniChat(this);
     storage = RevaniStorage(this);
     livekit = RevaniLivekit(this);
     pubsub = RevaniPubSub(this);
@@ -89,7 +94,6 @@ class RevaniClient {
               final decrypted = _decrypt(json['encrypted']);
               _responseController.add(jsonDecode(decrypted));
             } catch (e) {
-              print("Decryption Error: $e");
               _responseController.addError(e);
             }
           } else {
@@ -245,7 +249,6 @@ class RevaniAccount {
       if (idRes['status'] == 200) {
         _client.setAccount(idRes['data']['id']);
       } else {
-        print("Login Error (ID Fetch): ${idRes['message']}");
         return false;
       }
       return true;
@@ -310,6 +313,19 @@ class RevaniData {
     });
   }
 
+  Future<Map<String, dynamic>> addAll({
+    required String bucket,
+    required Map<String, Map<String, dynamic>> items,
+  }) async {
+    return await _client.execute({
+      'cmd': 'data/add-batch',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'bucket': bucket,
+      'items': items,
+    });
+  }
+
   Future<Map<String, dynamic>> get({
     required String bucket,
     required String tag,
@@ -319,6 +335,14 @@ class RevaniData {
       'projectID': _client.projectID,
       'bucket': bucket,
       'tag': tag,
+    });
+  }
+
+  Future<Map<String, dynamic>> getAll({required String bucket}) async {
+    return await _client.execute({
+      'cmd': 'data/get-all',
+      'projectID': _client.projectID,
+      'bucket': bucket,
     });
   }
 
@@ -358,6 +382,273 @@ class RevaniData {
       'projectID': _client.projectID,
       'bucket': bucket,
       'tag': tag,
+    });
+  }
+
+  Future<Map<String, dynamic>> deleteAll({required String bucket}) async {
+    return await _client.execute({
+      'cmd': 'data/delete-all',
+      'projectID': _client.projectID,
+      'bucket': bucket,
+    });
+  }
+}
+
+class RevaniUser {
+  final RevaniClient _client;
+  RevaniUser(this._client);
+
+  Future<Map<String, dynamic>> register({
+    required String email,
+    required String password,
+    String? name,
+    String? bio,
+    int? age,
+    String? profilePhoto,
+    String? deviceId,
+    String? deviceOs,
+    Map<String, dynamic>? customData,
+  }) async {
+    final userData = {
+      'email': email,
+      'password': password,
+      'name': name,
+      'bio': bio,
+      'age': age,
+      'profile_photo': profilePhoto,
+      'device_id': deviceId,
+      'device_os': deviceOs,
+      'data': customData,
+    };
+    return await _client.execute({
+      'cmd': 'user/register',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'userData': userData,
+    });
+  }
+
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    return await _client.execute({
+      'cmd': 'user/login',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'email': email,
+      'password': password,
+    });
+  }
+
+  Future<Map<String, dynamic>> getProfile(String userId) async {
+    return await _client.execute({
+      'cmd': 'user/get-profile',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'userId': userId,
+    });
+  }
+
+  Future<Map<String, dynamic>> editProfile(
+    String userId,
+    Map<String, dynamic> updates,
+  ) async {
+    return await _client.execute({
+      'cmd': 'user/edit-profile',
+      'userId': userId,
+      'updates': updates,
+    });
+  }
+
+  Future<Map<String, dynamic>> changePassword(
+    String userId,
+    String oldPass,
+    String newPass,
+  ) async {
+    return await _client.execute({
+      'cmd': 'user/change-password',
+      'userId': userId,
+      'oldPass': oldPass,
+      'newPass': newPass,
+    });
+  }
+}
+
+class RevaniSocial {
+  final RevaniClient _client;
+  RevaniSocial(this._client);
+
+  Future<Map<String, dynamic>> createPost({
+    required String userId,
+    required String text,
+    List<String>? images,
+    String? video,
+    List<String>? documents,
+  }) async {
+    return await _client.execute({
+      'cmd': 'social/post/create',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'postData': {
+        'user_id': userId,
+        'text': text,
+        'images': images,
+        'video': video,
+        'documents': documents,
+      },
+    });
+  }
+
+  Future<Map<String, dynamic>> getPost(String postId) async {
+    return await _client.execute({'cmd': 'social/post/get', 'postId': postId});
+  }
+
+  Future<Map<String, dynamic>> likePost(
+    String postId,
+    String userId,
+    bool isLike,
+  ) async {
+    return await _client.execute({
+      'cmd': 'social/post/like',
+      'postId': postId,
+      'userId': userId,
+      'isLike': isLike,
+    });
+  }
+
+  Future<Map<String, dynamic>> viewPost(String postId) async {
+    return await _client.execute({'cmd': 'social/post/view', 'postId': postId});
+  }
+
+  Future<Map<String, dynamic>> addComment(
+    String postId,
+    String userId,
+    String text,
+  ) async {
+    return await _client.execute({
+      'cmd': 'social/comment/add',
+      'postId': postId,
+      'userId': userId,
+      'text': text,
+    });
+  }
+
+  Future<Map<String, dynamic>> getComments(String postId) async {
+    return await _client.execute({
+      'cmd': 'social/comment/get',
+      'postId': postId,
+    });
+  }
+
+  Future<Map<String, dynamic>> likeComment(
+    String commentId,
+    String userId,
+    bool isLike,
+  ) async {
+    return await _client.execute({
+      'cmd': 'social/comment/like',
+      'commentId': commentId,
+      'userId': userId,
+      'isLike': isLike,
+    });
+  }
+}
+
+class RevaniChat {
+  final RevaniClient _client;
+  RevaniChat(this._client);
+
+  Future<Map<String, dynamic>> create(List<String> participants) async {
+    return await _client.execute({
+      'cmd': 'chat/create',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'participants': participants,
+    });
+  }
+
+  Future<Map<String, dynamic>> getList(String userId) async {
+    return await _client.execute({
+      'cmd': 'chat/get-list',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'userId': userId,
+    });
+  }
+
+  Future<Map<String, dynamic>> delete(String chatId) async {
+    return await _client.execute({'cmd': 'chat/delete', 'chatId': chatId});
+  }
+
+  Future<Map<String, dynamic>> sendMessage(
+    String chatId,
+    String senderId,
+    Map<String, dynamic> messageData,
+  ) async {
+    return await _client.execute({
+      'cmd': 'chat/message/send',
+      'chatId': chatId,
+      'senderId': senderId,
+      'messageData': messageData,
+    });
+  }
+
+  Future<Map<String, dynamic>> getMessages(String chatId) async {
+    return await _client.execute({
+      'cmd': 'chat/message/list',
+      'chatId': chatId,
+    });
+  }
+
+  Future<Map<String, dynamic>> updateMessage(
+    String messageId,
+    String senderId,
+    String newText,
+  ) async {
+    return await _client.execute({
+      'cmd': 'chat/message/update',
+      'messageId': messageId,
+      'senderId': senderId,
+      'newText': newText,
+    });
+  }
+
+  Future<Map<String, dynamic>> deleteMessage(
+    String messageId,
+    String userId,
+  ) async {
+    return await _client.execute({
+      'cmd': 'chat/message/delete',
+      'messageId': messageId,
+      'userId': userId,
+    });
+  }
+
+  Future<Map<String, dynamic>> react(
+    String messageId,
+    String userId,
+    String emoji,
+    bool add,
+  ) async {
+    return await _client.execute({
+      'cmd': 'chat/message/react',
+      'messageId': messageId,
+      'userId': userId,
+      'emoji': emoji,
+      'add': add,
+    });
+  }
+
+  Future<Map<String, dynamic>> pinMessage(String messageId, bool pin) async {
+    return await _client.execute({
+      'cmd': 'chat/message/pin',
+      'messageId': messageId,
+      'pin': pin,
+    });
+  }
+
+  Future<Map<String, dynamic>> getPinned(String chatId) async {
+    return await _client.execute({
+      'cmd': 'chat/message/get-pinned',
+      'chatId': chatId,
     });
   }
 }
