@@ -60,3 +60,8 @@
 ## 2.1.0
 
 > Security and improvements.
+
+
+## 2.1.1
+
+> Revani client dart updated

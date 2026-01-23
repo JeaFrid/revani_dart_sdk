@@ -55,8 +55,8 @@ class RevaniResponse {
   }
 }
 
-typedef SuccessCallback = void Function(dynamic data);
-typedef ErrorCallback = void Function(String error);
+typedef SuccessCallback = void Function(RevaniResponse response);
+typedef ErrorCallback = void Function(RevaniResponse response);
 
 class RevaniClient {
   final String host;
@@ -80,6 +80,8 @@ class RevaniClient {
   late final RevaniSocial social;
   late final RevaniChat chat;
   late final RevaniStorage storage;
+  late final RevaniLivekit livekit;
+  late final RevaniPubSub pubsub;
 
   final StreamController<Map<String, dynamic>> _responseController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -98,6 +100,8 @@ class RevaniClient {
     social = RevaniSocial(this);
     chat = RevaniChat(this);
     storage = RevaniStorage(this);
+    livekit = RevaniLivekit(this);
+    pubsub = RevaniPubSub(this);
   }
 
   String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host:${port + 1}";
@@ -187,7 +191,7 @@ class RevaniClient {
   }) async {
     if (_socket == null) {
       final res = RevaniResponse.networkError("Not connected");
-      if (onError != null) onError(res.error!);
+      onError?.call(res);
       return res;
     }
 
@@ -207,14 +211,14 @@ class RevaniClient {
       final response = RevaniResponse.fromMap(rawResponse);
 
       if (response.isSuccess) {
-        if (onSuccess != null) onSuccess(response.data);
+        onSuccess?.call(response);
       } else {
-        if (onError != null) onError(response.error ?? response.message);
+        onError?.call(response);
       }
       return response;
     } catch (e) {
       final res = RevaniResponse.networkError(e.toString());
-      if (onError != null) onError(res.error!);
+      onError?.call(res);
       return res;
     }
   }
@@ -322,14 +326,23 @@ class RevaniAccount {
       }
       if (res.data.containsKey('id')) {
         _client.setAccount(res.data['id']);
-        if (onSuccess != null) onSuccess(res.data);
+        onSuccess?.call(res);
         return res;
       }
     }
 
-    if (onError != null) onError(res.error ?? res.message);
+    onError?.call(res);
     return res;
   }
+
+  Future<RevaniResponse> getData({
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'account/get-data', 'id': _client.accountID},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
 }
 
 class RevaniProject {
@@ -361,8 +374,11 @@ class RevaniProject {
       'projectName': name,
     });
     if (res.isSuccess) _client.setProject(name, res.data['id'] ?? res.data);
-    if (res.isSuccess && onSuccess != null) onSuccess(res.data);
-    if (!res.isSuccess && onError != null) onError(res.error ?? res.message);
+    if (res.isSuccess) {
+      onSuccess?.call(res);
+    } else {
+      onError?.call(res);
+    }
     return res;
   }
 }
@@ -390,6 +406,23 @@ class RevaniData {
     onError: onError,
   );
 
+  Future<RevaniResponse> addBatch({
+    required String bucket,
+    required Map<String, Map<String, dynamic>> items,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'data/add-batch',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'bucket': bucket,
+      'items': items,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
   Future<RevaniResponse> get({
     required String bucket,
     required String tag,
@@ -402,6 +435,16 @@ class RevaniData {
       'bucket': bucket,
       'tag': tag,
     },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getAll({
+    required String bucket,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'data/get-all', 'projectID': _client.projectID, 'bucket': bucket},
     onSuccess: onSuccess,
     onError: onError,
   );
@@ -456,11 +499,40 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
+  Future<RevaniResponse> deleteAll({
+    required String bucket,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'data/delete-all',
+      'projectID': _client.projectID,
+      'bucket': bucket,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
 }
 
 class RevaniUser {
   final RevaniClient _client;
   RevaniUser(this._client);
+
+  Future<RevaniResponse> register(
+    Map<String, dynamic> userData, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'user/register',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'userData': userData,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
 
   Future<RevaniResponse> login(
     String email,
@@ -474,6 +546,49 @@ class RevaniUser {
       'projectName': _client.projectName,
       'email': email,
       'password': password,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getProfile(
+    String userId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'user/get-profile',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'userId': userId,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> editProfile(
+    String userId,
+    Map<String, dynamic> updates, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'user/edit-profile', 'userId': userId, 'updates': updates},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> changePassword(
+    String userId,
+    String oldPass,
+    String newPass, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'user/change-password',
+      'userId': userId,
+      'oldPass': oldPass,
+      'newPass': newPass,
     },
     onSuccess: onSuccess,
     onError: onError,
@@ -498,6 +613,87 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
+  Future<RevaniResponse> getPost(
+    String postId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'social/post/get', 'postId': postId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> toggleLike(
+    String postId,
+    String userId,
+    bool isLike, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'social/post/like',
+      'postId': postId,
+      'userId': userId,
+      'isLike': isLike,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> addView(
+    String postId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'social/post/view', 'postId': postId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> addComment(
+    String postId,
+    String userId,
+    String text, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'social/comment/add',
+      'postId': postId,
+      'userId': userId,
+      'text': text,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getComments(
+    String postId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'social/comment/get', 'postId': postId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> toggleCommentLike(
+    String commentId,
+    String userId,
+    bool isLike, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'social/comment/like',
+      'commentId': commentId,
+      'userId': userId,
+      'isLike': isLike,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
 }
 
 class RevaniChat {
@@ -515,6 +711,363 @@ class RevaniChat {
       'projectName': _client.projectName,
       'participants': participants,
     },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getList(
+    String userId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'chat/get-list',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'userId': userId,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> delete(
+    String chatId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'chat/delete', 'chatId': chatId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> sendMessage(
+    String chatId,
+    String senderId,
+    Map<String, dynamic> messageData, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'chat/message/send',
+      'chatId': chatId,
+      'senderId': senderId,
+      'messageData': messageData,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> listMessages(
+    String chatId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'chat/message/list', 'chatId': chatId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> updateMessage(
+    String messageId,
+    String senderId,
+    String newText, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'chat/message/update',
+      'messageId': messageId,
+      'senderId': senderId,
+      'newText': newText,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> deleteMessage(
+    String messageId,
+    String userId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'chat/message/delete', 'messageId': messageId, 'userId': userId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> react(
+    String messageId,
+    String userId,
+    String emoji,
+    bool add, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'chat/message/react',
+      'messageId': messageId,
+      'userId': userId,
+      'emoji': emoji,
+      'add': add,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> pin(
+    String messageId,
+    bool pin, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'chat/message/pin', 'messageId': messageId, 'pin': pin},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getPinned(
+    String chatId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'chat/message/get-pinned', 'chatId': chatId},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+}
+
+class RevaniLivekit {
+  final RevaniClient _client;
+  RevaniLivekit(this._client);
+
+  Future<RevaniResponse> init(
+    String host,
+    String apiKey,
+    String apiSecret, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/init',
+      'host': host,
+      'apiKey': apiKey,
+      'apiSecret': apiSecret,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> connect({
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/connect',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> createToken({
+    required String roomName,
+    required String userID,
+    required String userName,
+    bool isAdmin = false,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/create-token',
+      'roomName': roomName,
+      'userID': userID,
+      'userName': userName,
+      'isAdmin': isAdmin,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> createRoom(
+    String roomName, {
+    int timeout = 10,
+    int maxUsers = 50,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/create-room',
+      'roomName': roomName,
+      'emptyTimeoutMinute': timeout,
+      'maxUsers': maxUsers,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> closeRoom(
+    String roomName, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'livekit/close-room', 'roomName': roomName},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getRoomInfo(
+    String roomName, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'livekit/get-room-info', 'roomName': roomName},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getAllRooms({
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'livekit/get-all-rooms'},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> kickUser(
+    String roomName,
+    String userID, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'livekit/kick-user', 'roomName': roomName, 'userID': userID},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> getUserInfo(
+    String roomName,
+    String userID, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'livekit/get-user-info', 'roomName': roomName, 'userID': userID},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> updateMetadata(
+    String roomName,
+    String metadata, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/update-metadata',
+      'roomName': roomName,
+      'metadata': metadata,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> updateParticipant(
+    String roomName,
+    String userID, {
+    String? metadata,
+    dynamic permission,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/update-participant',
+      'roomName': roomName,
+      'userID': userID,
+      'metadata': metadata,
+      'permission': permission,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> muteParticipant(
+    String roomName,
+    String userID,
+    String trackSid,
+    bool muted, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'livekit/mute-participant',
+      'roomName': roomName,
+      'userID': userID,
+      'trackSid': trackSid,
+      'muted': muted,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> listParticipants(
+    String roomName, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'livekit/list-participants', 'roomName': roomName},
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+}
+
+class RevaniPubSub {
+  final RevaniClient _client;
+  RevaniPubSub(this._client);
+
+  Future<RevaniResponse> subscribe(
+    String topic,
+    String clientId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'pubsub/subscribe',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'clientId': clientId,
+      'topic': topic,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> publish(
+    String topic,
+    Map<String, dynamic> data, {
+    String? clientId,
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'pubsub/publish',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'topic': topic,
+      'data': data,
+      'clientId': clientId,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
+
+  Future<RevaniResponse> unsubscribe(
+    String topic,
+    String clientId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {'cmd': 'pubsub/unsubscribe', 'clientId': clientId, 'topic': topic},
     onSuccess: onSuccess,
     onError: onError,
   );
@@ -545,18 +1098,21 @@ class RevaniStorage {
       );
 
       final res = RevaniResponse.fromMap(jsonDecode(response.body));
-      if (res.isSuccess && onSuccess != null) onSuccess(res.data);
-      if (!res.isSuccess && onError != null) onError(res.error ?? res.message);
+      if (res.isSuccess) {
+        onSuccess?.call(res);
+      } else {
+        onError?.call(res);
+      }
       return res;
     } catch (e) {
       final res = RevaniResponse.networkError(e.toString());
-      if (onError != null) onError(res.error!);
+      onError?.call(res);
       return res;
     }
   }
 
-  Future<RevaniResponse> download({
-    required String fileId,
+  Future<RevaniResponse> download(
+    String fileId, {
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
   }) async {
@@ -575,20 +1131,35 @@ class RevaniStorage {
           message: "Success",
           data: {"bytes": response.bodyBytes},
         );
-        if (onSuccess != null) onSuccess(res.data);
+        onSuccess?.call(res);
         return res;
       } else {
         final res = RevaniResponse(
           status: response.statusCode,
           message: "Download Failed",
         );
-        if (onError != null) onError(res.message);
+        onError?.call(res);
         return res;
       }
     } catch (e) {
       final res = RevaniResponse.networkError(e.toString());
-      if (onError != null) onError(res.error!);
+      onError?.call(res);
       return res;
     }
   }
+
+  Future<RevaniResponse> delete(
+    String fileId, {
+    SuccessCallback? onSuccess,
+    ErrorCallback? onError,
+  }) => _client.execute(
+    {
+      'cmd': 'storage/delete',
+      'accountID': _client.accountID,
+      'projectName': _client.projectName,
+      'fileId': fileId,
+    },
+    onSuccess: onSuccess,
+    onError: onError,
+  );
 }
