@@ -1,10 +1,3 @@
-/*
- * Copyright (C) 2026 JeaFriday (https://github.com/JeaFrid/Revani)
- * * This project is part of Revani
- * Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
- * See the LICENSE file in the project root for full license information.
- * * For commercial licensing, please contact: JeaFriday
- */
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -268,6 +261,7 @@ class RevaniClient {
     _sessionKey = null;
     _accountID = null;
     _socket?.destroy();
+    _socket = null;
   }
 }
 
@@ -304,20 +298,26 @@ class RevaniAccount {
       'email': email,
       'password': password,
     }, useEncryption: false);
-    if (res.isSuccess) {
-      _client.setSession(res.data['session_key'] ?? res.data);
+
+    if (res.isSuccess &&
+        res.data is Map &&
+        res.data.containsKey('session_key')) {
+      _client.setSession(res.data['session_key']);
+
       final idRes = await _client.execute({
         'cmd': 'account/get-id',
         'email': email,
         'password': password,
-      });
-      if (idRes.isSuccess) {
+      }, useEncryption: false);
+
+      if (idRes.isSuccess && idRes.data is Map) {
         _client.setAccount(idRes.data['id']);
         if (onSuccess != null) onSuccess(idRes.data);
+        return idRes;
       }
-    } else {
-      if (onError != null) onError(res.error ?? res.message);
     }
+
+    if (onError != null) onError(res.error ?? res.message);
     return res;
   }
 }

@@ -52,3 +52,7 @@
 - `execute` method now returns a `RevaniResponse` object.
 - `login` function now returns a `RevaniResponse` (was `bool`), providing detailed failure reasons.
 - Storage-related commands are now handled via **HTTP endpoints** instead of the TCP `execute` command.
+
+## 2.0.1
+
+> Err fix
