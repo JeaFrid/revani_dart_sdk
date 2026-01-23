@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
+import 'package:http/http.dart' as http;
 
 class RevaniResponse {
   final int status;
@@ -24,11 +25,22 @@ class RevaniResponse {
   bool get isSuccess => status >= 200 && status < 300;
 
   static RevaniResponse fromMap(Map<String, dynamic> map) {
+    dynamic effectiveData = map['data'];
+    if (effectiveData == null && map.containsKey('id')) {
+      effectiveData = {'id': map['id']};
+    }
+    if (effectiveData == null && map.containsKey('session_key')) {
+      effectiveData = {'session_key': map['session_key']};
+    }
+    if (effectiveData == null && map.containsKey('token')) {
+      effectiveData = {'token': map['token']};
+    }
+
     return RevaniResponse(
       status: map['status'] ?? 500,
       message: map['message'] ?? (map['msg'] ?? 'Unknown'),
       error: map['error'],
-      data: map['data'],
+      data: effectiveData,
       description: map['description'],
     );
   }
@@ -57,6 +69,7 @@ class RevaniClient {
   String? _accountID;
   String? _projectName;
   String? _projectID;
+  String? _token;
   int _serverTimeOffset = 0;
   bool _isReconnecting = false;
 
@@ -67,8 +80,6 @@ class RevaniClient {
   late final RevaniSocial social;
   late final RevaniChat chat;
   late final RevaniStorage storage;
-  late final RevaniLivekit livekit;
-  late final RevaniPubSub pubsub;
 
   final StreamController<Map<String, dynamic>> _responseController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -87,9 +98,9 @@ class RevaniClient {
     social = RevaniSocial(this);
     chat = RevaniChat(this);
     storage = RevaniStorage(this);
-    livekit = RevaniLivekit(this);
-    pubsub = RevaniPubSub(this);
   }
+
+  String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host:${port + 1}";
 
   Future<void> connect() async {
     try {
@@ -247,6 +258,7 @@ class RevaniClient {
   void _handleConnectionDone() => _attemptReconnect();
   void setSession(String key) => _sessionKey = key;
   void setAccount(String id) => _accountID = id;
+  void setToken(String token) => _token = token;
   void setProject(String name, String? id) {
     _projectName = name;
     _projectID = id;
@@ -255,11 +267,13 @@ class RevaniClient {
   String get accountID => _accountID ?? "";
   String get projectName => _projectName ?? "";
   String get projectID => _projectID ?? "";
-  bool get isSignedIn => _sessionKey != null;
+  String get token => _token ?? "";
+  bool get isSignedIn => _token != null;
 
   void logout() {
     _sessionKey = null;
     _accountID = null;
+    _token = null;
     _socket?.destroy();
     _socket = null;
   }
@@ -299,21 +313,17 @@ class RevaniAccount {
       'password': password,
     }, useEncryption: false);
 
-    if (res.isSuccess &&
-        res.data is Map &&
-        res.data.containsKey('session_key')) {
-      _client.setSession(res.data['session_key']);
-
-      final idRes = await _client.execute({
-        'cmd': 'account/get-id',
-        'email': email,
-        'password': password,
-      }, useEncryption: false);
-
-      if (idRes.isSuccess && idRes.data is Map) {
-        _client.setAccount(idRes.data['id']);
-        if (onSuccess != null) onSuccess(idRes.data);
-        return idRes;
+    if (res.isSuccess && res.data != null) {
+      if (res.data.containsKey('session_key')) {
+        _client.setSession(res.data['session_key']);
+      }
+      if (res.data.containsKey('token')) {
+        _client.setToken(res.data['token']);
+      }
+      if (res.data.containsKey('id')) {
+        _client.setAccount(res.data['id']);
+        if (onSuccess != null) onSuccess(res.data);
+        return res;
       }
     }
 
@@ -452,21 +462,6 @@ class RevaniUser {
   final RevaniClient _client;
   RevaniUser(this._client);
 
-  Future<RevaniResponse> register(
-    Map<String, dynamic> userData, {
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'user/register',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'userData': userData,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
-
   Future<RevaniResponse> login(
     String email,
     String password, {
@@ -479,21 +474,6 @@ class RevaniUser {
       'projectName': _client.projectName,
       'email': email,
       'password': password,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
-
-  Future<RevaniResponse> getProfile(
-    String userId, {
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'user/get-profile',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'userId': userId,
     },
     onSuccess: onSuccess,
     onError: onError,
@@ -518,23 +498,6 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
-
-  Future<RevaniResponse> toggleLike(
-    String postId,
-    String userId,
-    bool isLike, {
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'social/post/like',
-      'postId': postId,
-      'userId': userId,
-      'isLike': isLike,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
 }
 
 class RevaniChat {
@@ -555,137 +518,77 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
-
-  Future<RevaniResponse> sendMessage(
-    String chatId,
-    String senderId,
-    Map<String, dynamic> messageData, {
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'chat/message/send',
-      'chatId': chatId,
-      'senderId': senderId,
-      'messageData': messageData,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
 }
 
 class RevaniStorage {
   final RevaniClient _client;
   RevaniStorage(this._client);
 
-  Future<RevaniResponse> upload(
-    String fileName,
-    List<int> bytes, {
+  Future<RevaniResponse> upload({
+    required String fileName,
+    required List<int> bytes,
     bool compress = false,
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'storage/upload',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'fileName': fileName,
-      'bytes': bytes,
-      'compress': compress,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
+  }) async {
+    try {
+      final url = Uri.parse("${_client.httpBaseUrl}/upload");
+      final response = await http.post(
+        url,
+        headers: {
+          'x-account-id': _client.accountID,
+          'x-project-name': _client.projectName,
+          'x-file-name': fileName,
+          'x-session-token': _client.token,
+        },
+        body: bytes,
+      );
 
-  Future<RevaniResponse> download(
-    String fileId, {
+      final res = RevaniResponse.fromMap(jsonDecode(response.body));
+      if (res.isSuccess && onSuccess != null) onSuccess(res.data);
+      if (!res.isSuccess && onError != null) onError(res.error ?? res.message);
+      return res;
+    } catch (e) {
+      final res = RevaniResponse.networkError(e.toString());
+      if (onError != null) onError(res.error!);
+      return res;
+    }
+  }
+
+  Future<RevaniResponse> download({
+    required String fileId,
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'storage/download',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'fileId': fileId,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
-}
+  }) async {
+    try {
+      final url = Uri.parse(
+        "${_client.httpBaseUrl}/file/${_client.projectID}/$fileId",
+      );
+      final response = await http.get(
+        url,
+        headers: {'x-session-token': _client.token},
+      );
 
-class RevaniLivekit {
-  final RevaniClient _client;
-  RevaniLivekit(this._client);
-
-  Future<RevaniResponse> init(
-    String host,
-    String key,
-    String secret, {
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {'cmd': 'livekit/init', 'host': host, 'apiKey': key, 'apiSecret': secret},
-    onSuccess: onSuccess,
-    onError: onError,
-  );
-
-  Future<RevaniResponse> createToken(
-    String room,
-    String uid,
-    String name, {
-    bool admin = false,
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'livekit/create-token',
-      'roomName': room,
-      'userID': uid,
-      'userName': name,
-      'isAdmin': admin,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
-}
-
-class RevaniPubSub {
-  final RevaniClient _client;
-  RevaniPubSub(this._client);
-
-  Future<RevaniResponse> subscribe(
-    String topic,
-    String clientId, {
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'pubsub/subscribe',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'clientId': clientId,
-      'topic': topic,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
-
-  Future<RevaniResponse> publish(
-    String topic,
-    Map<String, dynamic> data, {
-    String? senderId,
-    SuccessCallback? onSuccess,
-    ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'pubsub/publish',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'topic': topic,
-      'data': data,
-      'clientId': senderId,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
+      if (response.statusCode == 200) {
+        final res = RevaniResponse(
+          status: 200,
+          message: "Success",
+          data: {"bytes": response.bodyBytes},
+        );
+        if (onSuccess != null) onSuccess(res.data);
+        return res;
+      } else {
+        final res = RevaniResponse(
+          status: response.statusCode,
+          message: "Download Failed",
+        );
+        if (onError != null) onError(res.message);
+        return res;
+      }
+    } catch (e) {
+      final res = RevaniResponse.networkError(e.toString());
+      if (onError != null) onError(res.error!);
+      return res;
+    }
+  }
 }

@@ -56,3 +56,7 @@
 ## 2.0.1
 
 > Err fix
+
+## 2.1.0
+
+> Security and improvements.
