@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 class RevaniResponse {
   final int status;
@@ -83,6 +84,8 @@ class RevaniClient {
   late final RevaniLivekit livekit;
   late final RevaniPubSub pubsub;
 
+  late final http.Client _httpClient;
+
   final StreamController<Map<String, dynamic>> _responseController =
       StreamController<Map<String, dynamic>>.broadcast();
   final List<int> _buffer = [];
@@ -102,6 +105,11 @@ class RevaniClient {
     storage = RevaniStorage(this);
     livekit = RevaniLivekit(this);
     pubsub = RevaniPubSub(this);
+
+    final ioc = HttpClient();
+    ioc.badCertificateCallback =
+        (X509Certificate cert, String host, int port) => true;
+    _httpClient = IOClient(ioc);
   }
 
   String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host:${port + 1}";
@@ -1086,7 +1094,7 @@ class RevaniStorage {
   }) async {
     try {
       final url = Uri.parse("${_client.httpBaseUrl}/upload");
-      final response = await http.post(
+      final response = await _client._httpClient.post(
         url,
         headers: {
           'x-account-id': _client.accountID,
@@ -1120,7 +1128,7 @@ class RevaniStorage {
       final url = Uri.parse(
         "${_client.httpBaseUrl}/file/${_client.projectID}/$fileId",
       );
-      final response = await http.get(
+      final response = await _client._httpClient.get(
         url,
         headers: {'x-session-token': _client.token},
       );

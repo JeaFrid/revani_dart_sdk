@@ -65,3 +65,7 @@
 ## 2.1.1
 
 > Revani client dart updated
+
+## 2.1.2
+
+> Fix 2026-01-23
