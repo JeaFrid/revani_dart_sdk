@@ -73,3 +73,31 @@
 ## 2.1.3
 
 > Fix 2026-01-23
+
+## 3.0.0
+
+> **Major Update:** AOT Compilation, Turbocharged Authentication, and Identity Shielding.
+
+### 🏗️ AOT Compilation & Binary Packaging
+- **Native Binary Execution**: The `server/run.dart` management suite now compiles the entire project into a native executable (`server.exe`). This eliminates Dart VM warm-up times and allows the engine to run directly on hardware.
+- **Turbocharged Performance**: By switching from JIT to **Ahead-Of-Time (AOT)** compilation, the database engine and security pipelines now operate at peak CPU frequency with zero interpreter overhead.
+
+### 🔐 Advanced Identity Protection
+- **Identity Theft Prevention**: Implemented a strict "Lock & Key" mechanism that cross-verifies the `accountID` inside encrypted packets against the authorized `sessionOwnerID`.
+- **Impersonation Block**: The server now automatically detects and rejects any attempts to manipulate data using a session that does not match the provided Account identity.
+
+### ⚡ Turbocharged Login & Security
+- **High-Speed Authentication**: Re-engineered the Argon2id hashing parameters and worker isolate communication, reducing login latency from several seconds to a few hundred milliseconds.
+- **Efficient Security Pipelines**: Optimized the AES-GCM 256-bit encryption/decryption flow for the AOT environment, ensuring near-instant response times for stateful commands.
+
+### 📦 Hardened Storage Operations
+- **Guaranteed Delivery**: Storage operations are now more robust with enhanced asynchronous file-locking and integrity checks, ensuring 100% reliability during file transfers.
+- **Side-Kitchen Resilience**: Hardened the HTTP REST layer to prevent throughput bottlenecks during massive concurrent binary uploads.
+
+### 🛠️ Client & SDK Synchronization
+- **Protocol Alignment**: Updated the Revani Dart SDK to perfectly synchronize with the new AOT-packaged server structures and refined status code logic.
+- **Enhanced Debugging**: Improved error propagation within the client, providing more granular insights into server-side kitchen accidents.
+
+### ⚠️ Breaking Changes
+- **Execution Path**: For production environments, the server must now be started via the **AOT (Option 2)** in `run.dart` for intended performance levels.
+- **Binary Dependency**: The system now generates a `bin/server.exe` which is required for high-speed "Live Mode" execution.
