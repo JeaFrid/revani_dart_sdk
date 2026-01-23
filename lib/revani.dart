@@ -112,7 +112,7 @@ class RevaniClient {
     _httpClient = IOClient(ioc);
   }
 
-  String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host:${port + 1}";
+  String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host";
 
   Future<void> connect() async {
     try {
