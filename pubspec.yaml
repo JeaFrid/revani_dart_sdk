@@ -1,6 +1,6 @@
 name: revani
 description: Ultra-Fast, Ultra-Secure, Actor-Model Based Modern NoSQL Database SDK.
-version: 2.1.1
+version: 2.1.2
 repository: https://github.com/JeaFrid/revani_dart_sdk
 homepage: https://github.com/JeaFrid/revani_dart_sdk
 
