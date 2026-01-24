@@ -120,7 +120,7 @@ class RevaniClient {
 
     final ioc = HttpClient();
     ioc.badCertificateCallback =
-        (X509Certificate cert, String host, int port) => false;
+        (X509Certificate cert, String host, int port) => true;
     _httpClient = IOClient(ioc);
   }
 
@@ -161,10 +161,9 @@ class RevaniClient {
       if (res.isSuccess &&
           res.data != null &&
           res.data['payload'] != null &&
-          res.data['payload']['timestamp'] != null) {
+          res.data['payload']['ts'] != null) {
         _serverTimeOffset =
-            res.data['payload']['timestamp'] -
-            DateTime.now().millisecondsSinceEpoch;
+            res.data['payload']['ts'] - DateTime.now().millisecondsSinceEpoch;
       }
     } catch (_) {}
   }
@@ -1100,7 +1099,6 @@ class RevaniStorage {
   Future<RevaniResponse> upload({
     required File file,
     String? fileName,
-    bool compress = false,
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
   }) async {
@@ -1124,14 +1122,9 @@ class RevaniStorage {
 
       request.headers['x-account-id'] = _client.accountID;
       request.headers['x-project-name'] = _client.projectName;
-      request.headers['x-file-name'] = name;
       request.headers['x-session-token'] = _client.token;
+      request.headers['x-file-name'] = name;
       request.headers['content-type'] = 'application/octet-stream';
-
-      if (compress) {
-        request.headers['x-compress'] = 'true';
-      }
-
       request.contentLength = length;
 
       stream.listen(
@@ -1163,19 +1156,16 @@ class RevaniStorage {
   }
 
   Future<void> downloadToFile({
+    required String projectID,
     required String fileId,
     required String savePath,
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
   }) async {
     try {
-      final url = Uri.parse(
-        "${_client.httpBaseUrl}/file/${_client.projectID}/$fileId",
-      );
+      final url = Uri.parse("${_client.httpBaseUrl}/file/$projectID/$fileId");
 
       final request = http.Request('GET', url);
-      request.headers['x-session-token'] = _client.token;
-
       final response = await _client._httpClient.send(request);
 
       if (response.statusCode == 200) {
@@ -1203,38 +1193,6 @@ class RevaniStorage {
     } catch (e) {
       final res = RevaniResponse.networkError(e.toString());
       onError?.call(res);
-    }
-  }
-
-  Future<Stream<List<int>>?> downloadStream({
-    required String fileId,
-    ErrorCallback? onError,
-  }) async {
-    try {
-      final url = Uri.parse(
-        "${_client.httpBaseUrl}/file/${_client.projectID}/$fileId",
-      );
-
-      final request = http.Request('GET', url);
-      request.headers['x-session-token'] = _client.token;
-
-      final response = await _client._httpClient.send(request);
-
-      if (response.statusCode == 200) {
-        return response.stream;
-      } else {
-        onError?.call(
-          RevaniResponse(
-            status: response.statusCode,
-            message: "Stream Init Failed",
-            error: response.reasonPhrase,
-          ),
-        );
-        return null;
-      }
-    } catch (e) {
-      onError?.call(RevaniResponse.networkError(e.toString()));
-      return null;
     }
   }
 

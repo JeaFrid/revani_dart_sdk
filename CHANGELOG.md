@@ -105,3 +105,31 @@
 ## [3.1.0] - 2026-01-24
 
 - Minor changes and bug fixes related to storage space.
+
+## 3.2.1
+
+> **Storage Revolution:** Database-Independent File System, Session-Verified Ingestion, and High-Speed Binary Piping.
+
+### 🏗️ DB-Independent Storage Architecture
+- **Decoupled File Management**: Fully separated the storage layer from the NoSQL engine. Files are no longer registered in the database, allowing the engine to focus strictly on data state while storage operates directly on the file system.
+- **Direct Path Hierarchy**: Implemented a clean directory structure (`storage/projectID/fileID`) that mirrors the project organization, enabling instant file resolution without database lookups.
+
+### 🔐 Hybrid Security & Session Handshake
+- **TCP-to-HTTP Verification**: Bridged the security gap by requiring a valid TCP-generated `x-session-token` for all HTTP upload operations. This ensures that only users with an active, authenticated "Bakery" session can process files.
+- **Identity Enforcement**: The server now cross-verifies the `accountID` provided in the request headers against the session owner, preventing unauthorized file injections into other projects.
+
+### ⚡ Performance & Raw Data Piping
+- **Raw Binary Stream**: Re-engineered the ingestion pipeline to use direct `IOSink` piping. Binary data now flows from the network socket directly to the disk, bypassing RAM-intensive decoding and eliminating the 500kb threshold crash.
+- **Zero-Interpreter Overhead**: By removing intermediate object mapping, file operations now achieve near-native throughput, limited only by disk I/O and network bandwidth.
+
+### 🧹 Lean Infrastructure & Stability
+- **Dependency Purge**: Removed server-side image processing logic and the `package:image` dependency. This lightens the native binary and prevents Isolate-level RAM exhaustion during large file transfers.
+- **Stateless Media Serving**: Optimized the "Side-Kitchen" HTTP layer for stateless GET requests, allowing public file access via direct URLs without redundant token verification overhead.
+
+### 🛠️ Client & SDK Alignment
+- **Header Synchronization**: Updated the Dart SDK to automatically include required session tokens and project identifiers in the HTTP transport layer.
+- **Robust Error Handling**: Fixed a critical bug where interrupted transfers would return `null`. The system now correctly propagates file-system exceptions for better client-side recovery.
+
+### ⚠️ Breaking Changes
+- **Storage Metadata**: The `storage_meta` collection is deprecated. All file-related metadata must now be handled at the application layer or inferred from the file structure.
+- **Upload Protocol**: All file uploads via HTTP now **must** include `x-session-token` and `x-account-id` headers derived from a successful TCP login.
