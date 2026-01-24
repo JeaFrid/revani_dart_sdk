@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as encrypt;
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
+import 'package:path/path.dart' as p;
 
 class RevaniResponse {
   final int status;
@@ -54,6 +55,16 @@ class RevaniResponse {
       error: error,
       description: 'Connection failed',
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'status': status,
+      'message': message,
+      'error': error,
+      'data': data,
+      'description': description,
+    };
   }
 }
 
@@ -113,7 +124,7 @@ class RevaniClient {
     _httpClient = IOClient(ioc);
   }
 
-  String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host";
+  String get httpBaseUrl => "${secure ? 'https' : 'http'}://$host:${port + 1}";
 
   Future<void> connect() async {
     try {
@@ -147,9 +158,13 @@ class RevaniClient {
       final res = await execute({
         'cmd': 'health',
       }, useEncryption: false).timeout(const Duration(seconds: 2));
-      if (res.isSuccess && res.data != null && res.data['timestamp'] != null) {
+      if (res.isSuccess &&
+          res.data != null &&
+          res.data['payload'] != null &&
+          res.data['payload']['timestamp'] != null) {
         _serverTimeOffset =
-            res.data['timestamp'] - DateTime.now().millisecondsSinceEpoch;
+            res.data['payload']['timestamp'] -
+            DateTime.now().millisecondsSinceEpoch;
       }
     } catch (_) {}
   }
@@ -364,7 +379,7 @@ class RevaniProject {
       'projectName': name,
     });
     if (res.isSuccess) {
-      _client.setProject(name, res.data['id'] ?? res.data);
+      _client.setProject(name, res.data['id'] ?? res.data['payload']);
       onSuccess?.call(res);
     } else {
       onError?.call(res);
@@ -409,6 +424,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> addBatch({
     required String bucket,
     required Map<String, Map<String, dynamic>> items,
@@ -425,6 +441,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> get({
     required String bucket,
     required String tag,
@@ -440,6 +457,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getAll({
     required String bucket,
     SuccessCallback? onSuccess,
@@ -449,6 +467,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> query({
     required String bucket,
     required Map<String, dynamic> query,
@@ -465,6 +484,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> update({
     required String bucket,
     required String tag,
@@ -482,6 +502,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> delete({
     required String bucket,
     required String tag,
@@ -497,6 +518,7 @@ class RevaniData {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> deleteAll({
     required String bucket,
     SuccessCallback? onSuccess,
@@ -530,6 +552,7 @@ class RevaniUser {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> login(
     String email,
     String password, {
@@ -546,6 +569,7 @@ class RevaniUser {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getProfile(
     String userId, {
     SuccessCallback? onSuccess,
@@ -560,6 +584,7 @@ class RevaniUser {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> editProfile(
     String userId,
     Map<String, dynamic> updates, {
@@ -570,6 +595,7 @@ class RevaniUser {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> changePassword(
     String userId,
     String oldPass,
@@ -606,6 +632,7 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getPost(
     String postId, {
     SuccessCallback? onSuccess,
@@ -615,6 +642,7 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> toggleLike(
     String postId,
     String userId,
@@ -631,6 +659,7 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> addView(
     String postId, {
     SuccessCallback? onSuccess,
@@ -640,6 +669,7 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> addComment(
     String postId,
     String userId,
@@ -656,6 +686,7 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getComments(
     String postId, {
     SuccessCallback? onSuccess,
@@ -665,6 +696,7 @@ class RevaniSocial {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> toggleCommentLike(
     String commentId,
     String userId,
@@ -701,6 +733,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getList(
     String userId, {
     SuccessCallback? onSuccess,
@@ -715,6 +748,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> delete(
     String chatId, {
     SuccessCallback? onSuccess,
@@ -724,6 +758,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> sendMessage(
     String chatId,
     String senderId,
@@ -740,6 +775,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> listMessages(
     String chatId, {
     SuccessCallback? onSuccess,
@@ -749,6 +785,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> updateMessage(
     String messageId,
     String senderId,
@@ -765,6 +802,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> deleteMessage(
     String messageId,
     String userId, {
@@ -775,6 +813,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> react(
     String messageId,
     String userId,
@@ -793,6 +832,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> pin(
     String messageId,
     bool pin, {
@@ -803,6 +843,7 @@ class RevaniChat {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getPinned(
     String chatId, {
     SuccessCallback? onSuccess,
@@ -834,6 +875,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> connect({
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
@@ -846,6 +888,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> createToken({
     required String roomName,
     required String userID,
@@ -864,6 +907,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> createRoom(
     String roomName, {
     int timeout = 10,
@@ -880,6 +924,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> closeRoom(
     String roomName, {
     SuccessCallback? onSuccess,
@@ -889,6 +934,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getRoomInfo(
     String roomName, {
     SuccessCallback? onSuccess,
@@ -898,6 +944,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getAllRooms({
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
@@ -906,6 +953,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> kickUser(
     String roomName,
     String userID, {
@@ -916,6 +964,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> getUserInfo(
     String roomName,
     String userID, {
@@ -926,6 +975,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> updateMetadata(
     String roomName,
     String metadata, {
@@ -940,6 +990,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> updateParticipant(
     String roomName,
     String userID, {
@@ -958,6 +1009,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> muteParticipant(
     String roomName,
     String userID,
@@ -976,6 +1028,7 @@ class RevaniLivekit {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> listParticipants(
     String roomName, {
     SuccessCallback? onSuccess,
@@ -1007,6 +1060,7 @@ class RevaniPubSub {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> publish(
     String topic,
     Map<String, dynamic> data, {
@@ -1025,6 +1079,7 @@ class RevaniPubSub {
     onSuccess: onSuccess,
     onError: onError,
   );
+
   Future<RevaniResponse> unsubscribe(
     String topic,
     String clientId, {
@@ -1039,28 +1094,77 @@ class RevaniPubSub {
 
 class RevaniStorage {
   final RevaniClient _client;
+
   RevaniStorage(this._client);
 
   Future<RevaniResponse> upload({
-    required String fileName,
-    required List<int> bytes,
+    required File file,
+    String? fileName,
+    bool compress = false,
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
-  }) => _client.execute(
-    {
-      'cmd': 'storage/upload',
-      'accountID': _client.accountID,
-      'projectName': _client.projectName,
-      'fileName': fileName,
-      'bytes': bytes,
-      'compress': true,
-    },
-    onSuccess: onSuccess,
-    onError: onError,
-  );
+  }) async {
+    try {
+      if (!file.existsSync()) {
+        final res = RevaniResponse(
+          status: 404,
+          message: "File not found locally",
+          error: "FileSystemException",
+        );
+        onError?.call(res);
+        return res;
+      }
 
-  Future<RevaniResponse> download(
-    String fileId, {
+      final stream = file.openRead();
+      final length = await file.length();
+      final name = fileName ?? p.basename(file.path);
+
+      final url = Uri.parse("${_client.httpBaseUrl}/upload");
+      final request = http.StreamedRequest("POST", url);
+
+      request.headers['x-account-id'] = _client.accountID;
+      request.headers['x-project-name'] = _client.projectName;
+      request.headers['x-file-name'] = name;
+      request.headers['x-session-token'] = _client.token;
+      request.headers['content-type'] = 'application/octet-stream';
+
+      if (compress) {
+        request.headers['x-compress'] = 'true';
+      }
+
+      request.contentLength = length;
+
+      stream.listen(
+        (chunk) => request.sink.add(chunk),
+        onDone: () => request.sink.close(),
+        onError: (e) {
+          request.sink.addError(e);
+          request.sink.close();
+        },
+        cancelOnError: true,
+      );
+
+      final streamedResponse = await request.send();
+      final responseString = await streamedResponse.stream.bytesToString();
+      final jsonResponse = jsonDecode(responseString);
+      final res = RevaniResponse.fromMap(jsonResponse);
+
+      if (res.isSuccess) {
+        onSuccess?.call(res);
+      } else {
+        onError?.call(res);
+      }
+      return res;
+    } catch (e) {
+      final res = RevaniResponse.networkError(e.toString());
+      onError?.call(res);
+      return res;
+    }
+  }
+
+  Future<void> downloadToFile({
+    required String fileId,
+    required String savePath,
     SuccessCallback? onSuccess,
     ErrorCallback? onError,
   }) async {
@@ -1068,30 +1172,69 @@ class RevaniStorage {
       final url = Uri.parse(
         "${_client.httpBaseUrl}/file/${_client.projectID}/$fileId",
       );
-      final response = await _client._httpClient.get(
-        url,
-        headers: {'x-session-token': _client.token},
-      );
+
+      final request = http.Request('GET', url);
+      request.headers['x-session-token'] = _client.token;
+
+      final response = await _client._httpClient.send(request);
+
       if (response.statusCode == 200) {
+        final file = File(savePath);
+        final sink = file.openWrite();
+
+        await response.stream.pipe(sink);
+        await sink.flush();
+        await sink.close();
+
         final res = RevaniResponse(
           status: 200,
-          message: "Success",
-          data: {"bytes": response.bodyBytes},
+          message: "File downloaded to $savePath",
+          data: {"path": savePath},
         );
         onSuccess?.call(res);
-        return res;
       } else {
         final res = RevaniResponse(
           status: response.statusCode,
           message: "Download Failed",
+          error: response.reasonPhrase,
         );
         onError?.call(res);
-        return res;
       }
     } catch (e) {
       final res = RevaniResponse.networkError(e.toString());
       onError?.call(res);
-      return res;
+    }
+  }
+
+  Future<Stream<List<int>>?> downloadStream({
+    required String fileId,
+    ErrorCallback? onError,
+  }) async {
+    try {
+      final url = Uri.parse(
+        "${_client.httpBaseUrl}/file/${_client.projectID}/$fileId",
+      );
+
+      final request = http.Request('GET', url);
+      request.headers['x-session-token'] = _client.token;
+
+      final response = await _client._httpClient.send(request);
+
+      if (response.statusCode == 200) {
+        return response.stream;
+      } else {
+        onError?.call(
+          RevaniResponse(
+            status: response.statusCode,
+            message: "Stream Init Failed",
+            error: response.reasonPhrase,
+          ),
+        );
+        return null;
+      }
+    } catch (e) {
+      onError?.call(RevaniResponse.networkError(e.toString()));
+      return null;
     }
   }
 

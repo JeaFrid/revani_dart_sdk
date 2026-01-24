@@ -101,3 +101,7 @@
 ### ⚠️ Breaking Changes
 - **Execution Path**: For production environments, the server must now be started via the **AOT (Option 2)** in `run.dart` for intended performance levels.
 - **Binary Dependency**: The system now generates a `bin/server.exe` which is required for high-speed "Live Mode" execution.
+
+## [3.1.0] - 2026-01-24
+
+- Minor changes and bug fixes related to storage space.
